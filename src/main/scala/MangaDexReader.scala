@@ -384,18 +384,16 @@ object MangaDexReader {
 
 	def main (args: Array[String]): Unit = {
 
-		/*
 		var term = CLITool.init()
 		CLITool.addMenu(Array("File", "Login", "Quit"), false)
-		//CLITool.drawWindows()
-		CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I download the latest manga data.", 30, false)
+		CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I download the latest manga data...", 30, false)
+		CLITool.termUpdate(true)
 		// Read data from the web
-		*/
 		var tableData = getMangaData("", 2022)
 		if (tableData != None) {
 
 			// Start the Spark session
-			System.setProperty("hadoop.home.dir", "C:\\hadoop")
+			System.setProperty("hadoop.home.dir", "C:\\hadoop")  // ToDo: Change this directory if needed.
 			Logger.getLogger("org").setLevel(Level.ERROR)  // Hide most of the initial non-error log messages
 			//val warehouseLocation = new File("spark-warehouse").getAbsolutePath  // warehouseLocation points to the default location for managed databases and tables
 			spark = SparkSession.builder
@@ -405,7 +403,8 @@ object MangaDexReader {
 				.enableHiveSupport()
 				.getOrCreate()
 			spark.sparkContext.setLogLevel("ERROR")  // Hide further non-error messages
-			println("Created Spark session.")
+			// println("Created Spark session.")
+			CLITool.termUpdate(true)
 
 			// Build dataframe
 			val tableStructure = new StructType()  // Describe the data
@@ -415,15 +414,16 @@ object MangaDexReader {
 				.add("Year", IntegerType, false)
 				.add("Language", StringType, false)  // Partitioned by this so it must be last
 			val df = spark.createDataFrame(spark.sparkContext.parallelize(tableData.get), tableStructure)  // Read the data into the dataframe
+			/*
 			println("\nDataframe schema:")
 			df.printSchema()
 			println("Dataframe data:")
 			df.show(100, false)
-
-			/*
-			CLITool.deleteWin("Loading...")
-			CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I build the tables.", 30, false)
 			*/
+
+			CLITool.deleteWin("Loading...")
+			CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I build the tables...", 30, false)
+			CLITool.termUpdate(true)
 			// Build database
 			spark.sql("SET hive.exec.dynamic.partition.mode=nonstrict")
 			spark.sql("CREATE DATABASE IF NOT EXISTS mangadex")
@@ -435,26 +435,31 @@ object MangaDexReader {
 				spark.sql("CREATE TABLE users (Username STRING, Class INT, PassHash INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
 				spark.sql("INSERT INTO users (Username, Class, PassHash) VALUES ('admin', 0, 0)")
 			}
-			println("Users table:")
-			spark.sql("SELECT * FROM users").show(false)
+			//println("Users table:")
+			//spark.sql("SELECT * FROM users").show(false)
 
-			/*
 			CLITool.deleteWin("Loading...")
-			CLITool.addMessage("Ready", "Welcome to the MangaDex Reader.\nYou can use the INSERT key to select an item from the menu.", 30, false)
+			CLITool.addMessage("Ready", "Welcome to the MangaDex Reader.\nYou can use the INSERT key to select an item from the menu.", 30)
 
 			var continue = true
+			CLITool.termUpdate(true)
 			var cmd = new CLITool.Command()
 			while (continue) {
-				CLITool.deleteWin("Ready")
+				cmd = CLITool.getCommand()
+				print(ansiResetLn)
 				cmd.raw match {
 					case ""						=>  // Do nothing
 					case "q" | "quit" | "Quit"	=> continue = false
-					case "Login"				=>   // Handle login
-					case _ 						=> print(s"Unknown command: '${cmd.raw}'")  // Unknown command
+					case "Login"				=> {  // Handle login
+						CLITool.addInput("Login Window", "Login or create a new account.", LinkedHashMap(("Username:", "default"), ("~Password:", "")), 35)
+						cmd = CLITool.getCommand()
+						print(ansiResetLn + s"Login result: '${cmd.raw}'")
+					}
+					case _ 						=> print(ansiResetLn + s"Unknown command: '${cmd.raw}'")  // Unknown command
 				}
 			}
-			*/
 
+			/*
 			// Initialize admin account / login
 			if (login("admin", "password"))
 				println("\nLogged in as 'admin'.\n")
@@ -522,6 +527,7 @@ object MangaDexReader {
 				println(s"\nShowing stats for manga '${mangaTitle}'")
 				getMangaStats(mangaID)
 			}
+			*/
 
 			// End Spark session
 			spark.stop()

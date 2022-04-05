@@ -223,6 +223,9 @@ package object CLITool {
 	  * @return	Current CLITool mode ("text", "window", or "menu").
 	  */
 	def getMode (): String = mode  // Read-only mode access
+	/**
+	  * Possible modes = "text", "window", or "menu"
+	  */
 	private var mode = "text"
 
 	// Window mode variables
@@ -494,7 +497,11 @@ package object CLITool {
 	def deleteWin (label: String): Boolean = {
 		val idx = window.indexWhere(_.asInstanceOf[CLIWinObj].label() == label)
 		if (idx > -1) {  // Delete a window
+			if (activewin == idx)  // Switch to "no active window" mode
+				activewin = -1
 			window.remove(idx)
+			if ((activewin == -1) && (mode == "window"))  // Switch out of "window" mode if an active window isn't selected
+				mode = "text"
 			true
 		} else
 			false
@@ -552,7 +559,7 @@ package object CLITool {
 						val height = winObj.numLines + 4  // Window height
 						row = (termHeight - height).max(2) / 2
 						col = (termWidth - maxWidth - 4) / 2
-						if (win == window(activewin))  // Top line of the window
+						if ((win == window(activewin)) && (mode == "window"))  // Top line of the window
 							line = winBkgColor + winTxtColor + "┌─" + ansiInvert + " " + winObj.label + " " + ansiNotInverted + ("─" * (maxWidth - winObj.label.length - 1)) + "┐"
 						else
 							line = winBkgColor + winTxtColor + "┌─ " + winObj.label + " " + ("─" * (maxWidth - winObj.label.length - 1)) + "┐"
@@ -602,7 +609,7 @@ package object CLITool {
 						var tmpStr = ""
 						row = (termHeight - height).max(2) / 2
 						col = (termWidth - interiorWidth - 4) / 2
-						if (win == window(activewin))  // Top line of the window
+						if ((win == window(activewin)) && (mode == "window"))  // Top line of the window
 							line = winBkgColor + winTxtColor + "┌─" + ansiInvert + " " + winObj.label + " " + ansiNotInverted + ("─" * (interiorWidth - winObj.label.length - 1)) + "┐"
 						else
 							line = winBkgColor + winTxtColor + "┌─ " + winObj.label + " " + ("─" * (interiorWidth - winObj.label.length - 1)) + "┐"
@@ -673,7 +680,7 @@ package object CLITool {
 							line = winBkgColor + winTxtColor + "│" + (" " * (interiorWidth + 2)) + "│"  // Second to last line
 						screen(row) = screen(row).ansiReplaceString(line, col)  // Bottom gap
 						row += 1
-						line = winBkgColor + winTxtColor + "└─" + ("─" * (interiorWidth + 16))  // Bottom line
+						line = winBkgColor + winTxtColor + "└─" + ("─" * (interiorWidth - 14))  // Bottom line
 						if (winObj.index == -2)  // "OK" selected
 							line += ansiInvert + " OK " + ansiNotInverted + "──"
 						else
@@ -979,7 +986,7 @@ package object CLITool {
 						}
 						case 9 	=>		// CTRL+i / TAB key
 						case 12	=>		// CTRL+l
-						case 13	=> {	// ENTER key; end the loop
+						case 10 | 13	=> {	// ENTER key; end the loop
 							inputPos = -1
 							inputStr = inputStr.trim()
 							drawText(true)
@@ -1141,7 +1148,7 @@ package object CLITool {
 						case 8	=>		// CTRL+h / SHIFT+BACKSPACE keys
 						case 9 	=>		// CTRL+i / TAB key
 						case 12	=>		// CTRL+l
-						case 13 | 32 => {	// ENTER or SPACE key
+						case 10 | 13 | 32 => {	// ENTER or SPACE key
 							inputStr = menu(menuCol)(menuRow + 1)
 							menuCol = -1
 							menuRow = -1
@@ -1251,7 +1258,7 @@ package object CLITool {
 										while (reader.peek(20) > 0)
 											keycmd += reader.read().toChar  // Read in any pending inputs from an ESC code
 									}
-									if (keycmd == "[A" || keycmd == "[B" || keycmd == "[5~" || keycmd == "[6~") {  // UP, DOWN, PAGE UP, PAGE DOWN scrolling
+									if (List("[A", "[B", "[5~", "[6~", "[F", "[4~", "[8~", "[H", "[1~", "[7~").indexOf(keycmd) > -1) {  // UP, DOWN, PAGE UP, PAGE DOWN, END, and HOME scrolling
 										var msgObj = window(activewin).obj.asInstanceOf[CLIMsgWin]
 										var oldPos = msgObj.scrollPos
 										keycmd match {
@@ -1259,6 +1266,8 @@ package object CLITool {
 											case "[B"	=> msgObj.scrollPos = (msgObj.scrollPos + 1).min(msgObj.maxScroll)  // DOWN key
 											case "[5~"	=> msgObj.scrollPos = (msgObj.scrollPos - msgObj.maxVisibleLines).max(0)  // PAGE UP key
 											case "[6~"	=> msgObj.scrollPos = (msgObj.scrollPos + msgObj.maxVisibleLines).min(msgObj.maxScroll)  // PAGE DOWN key
+											case "[F" | "[4~" | "[8~" => msgObj.scrollPos = msgObj.maxScroll  // END key
+											case "[H" | "[1~" | "[7~" => msgObj.scrollPos = 0  // HOME key
 										}
 										if (oldPos != msgObj.scrollPos)
 											termUpdate()
@@ -1288,18 +1297,33 @@ package object CLITool {
 									case 4	=>		// CTRL+d
 									case 7	=>		// CTRL+g
 									case 8	=>		// CTRL+h / SHIFT+BACKSPACE keys
-									case 9 	=>		// CTRL+i / TAB key
+									case 9 	=> {	// CTRL+i / TAB key
+										window(activewin).obj.asInstanceOf[CLIInputWin].index += 1
+										if (window(activewin).index >= window(activewin).obj.asInstanceOf[CLIInputWin].items.size)
+											window(activewin).obj.asInstanceOf[CLIInputWin].index += -2
+										drawWindows()
+									}
 									case 12	=>		// CTRL+l
-									case 13 | 32 => {	// ENTER or SPACE key
-										inputStr = ""
-										if (activewin > -1 && activewin < window.length)
-											window.remove(activewin)
-										activewin = -1
-										mode = "empty"  // Exit "window" mode
-										termUpdate()
-										mode = "text"
-										print(ansiResetLn + ansiScrollUp(1))
-										continue = false  // Exit the loop
+									case 10 | 13 | 32 => {	// ENTER or SPACE key
+										if (window(activewin).index < 0) {  // Activate OK/Cancel button
+											inputStr = ""
+											if (window(activewin).index == -2) {
+												command = "OK"
+												for (a <- window(activewin).obj.asInstanceOf[CLIInputWin].items)  // Get inputs
+													args :+= a._2
+											} else
+												command = "Cancel"
+											if (activewin > -1 && activewin < window.length)
+												window.remove(activewin)
+											activewin = -1
+											mode = "empty"  // Exit "window" mode
+											termUpdate()
+											mode = "text"
+											print(ansiResetLn)
+											continue = false  // Exit the loop
+										} else {  // Entering text
+											//x
+										}
 									}
 									case 14	=>		// CTRL+n
 									case 15	=>		// CTRL+o
@@ -1373,7 +1397,7 @@ package object CLITool {
 						case 8	=>		// CTRL+h / SHIFT+BACKSPACE keys
 						case 9 	=>		// CTRL+i / TAB key
 						case 12	=>		// CTRL+l
-						case 13	=>		// ENTER key
+						case 10 | 13	=>		// ENTER key
 						case 14	=>		// CTRL+n
 						case 15	=>		// CTRL+o
 						case 18	=> {	// CTRL+r  (force redraw)
@@ -1469,7 +1493,7 @@ package object CLITool {
 				CTRL+c = (BREAK)
 				CTRL+e = (unsafe - VSCode command: Go to file...)
 				CTRL+f = (unsafe - VSCode command: Find)
-				CTRL+j = (unsafe - VSCode command: Toggle panel)
+				CTRL+j = ENTER + (unsafe - VSCode command: Toggle panel)
 				CTRL+k = (unsafe - VSCode command: Command code)
 				CTRL+m = ENTER + (unsafe - VSCode command: Tab toggle)
 				CTRL+p = (unsafe - VSCode command: Go to file...)

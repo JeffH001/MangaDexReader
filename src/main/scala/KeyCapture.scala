@@ -1,12 +1,11 @@
+/*
 package com.JeffH001
 
 import com.JeffH001.ANSICodes._
 import com.JeffH001.CLITool._
 import scala.collection.mutable.LinkedHashMap
 
-/**
-  * Main CLITool example code.
-  */
+// Main CLITool example code.
 object KeyCapture {
 
 	def main (args: Array[String]): Unit = {
@@ -79,3 +78,4 @@ object KeyCapture {
 		CLITool.close()
 	}
 }
+*/
