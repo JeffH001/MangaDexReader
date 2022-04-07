@@ -24,6 +24,7 @@ The plan was to have the ability for users to search for manga, add them to thei
 - sbt v1.6.2
 - Java v8 (v1.8.0_312)
 - Spark v3.1.3
+- Hive v3.1.2
 - Hadoop v3.3.0
 - VSCode v1.66.1
 - - Scala (Metals) extension (by Scalameta) v1.13.0
