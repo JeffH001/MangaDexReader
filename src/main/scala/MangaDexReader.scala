@@ -384,8 +384,8 @@ object MangaDexReader {
 
 	def main (args: Array[String]): Unit = {
 
-		var term = CLITool.init()
-		CLITool.addMenu(Array("File", "Login", "Quit"), false)
+		var term = CLITool.init()  // Initialize the terminal window
+		CLITool.addMenu(Array("File", "Login", "Quit", "Quit + Run Queries"), false)
 		CLITool.addMessage("Loading...", "Please wait while I download the latest manga data...", 35, false)
 		CLITool.termUpdate(true)
 		// Read data from the web
@@ -442,6 +442,7 @@ object MangaDexReader {
 			CLITool.addMessage("Welcome to the MangaDex Reader.", "You can use the INSERT key to select an item from the menu.\n\n(Hit any key to begin.)", 35)
 
 			var continue = true
+			var queries = false
 			CLITool.termUpdate(true)
 			var cmd = new CLITool.Command()
 			while (continue) {
@@ -450,24 +451,29 @@ object MangaDexReader {
 				cmd.raw match {
 					case ""						=>  // Do nothing
 					case "q" | "quit" | "Quit"	=> continue = false
-					case "Login"				=> {  // Handle login
+					case "Quit + Run Queries"	=> {
+						continue = false
+						queries = true
+					}
+					case "Login" if (cmd.cmdType == "menu")		=> {  // Handle login
 						CLITool.addInput("Login Window", "Login or create a new account.", LinkedHashMap(("Username:", ""), ("~Password:", "")), 35)
 						cmd = CLITool.getCommand()
 						if (login(cmd.args(0), cmd.args(1))) {
 							print(ansiResetLn + s"Logged in as '${cmd.args(0)}'.")
-							CLITool.addMenu(Array("File", "Log Out", "Quit"), false)
+							CLITool.updateMenu(Array("File", "Log Out", "Quit"), false)
 						} else {
 							print(ansiResetLn + s"Unable to log in as '${cmd.args(0)}'.  Incorrect password.")
 						}
 					}
-					case "Log Out"				=> {  // Handle log out
+					case "Log Out" if (cmd.cmdType == "menu")	=> {  // Handle log out
 						logout()
 						print(ansiResetLn + "Logged out.")
-						CLITool.addMenu(Array("File", "Login", "Quit"), false)
+						CLITool.updateMenu(Array("File", "Login", "Quit"), false)
 					}
 					case _ 						=> print(ansiResetLn + s"Unknown command: '${cmd.raw}'")  // Unknown command
 				}
 			}
+			CLITool.close()  // Close the terminal window
 
 			/*
 			// Initialize admin account / login
@@ -489,55 +495,57 @@ object MangaDexReader {
 			// Delete new user
 			userDelete("newUser")
 			spark.sql("SELECT * FROM users").show(false)
-
-			// Build "manga" table
-			spark.sql("DROP TABLE IF EXISTS manga")
-			spark.sql("CREATE TABLE manga (MangaID STRING, Title STRING, Status STRING, Year INT) PARTITIONED BY (Language STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
-			df.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
-			spark.sql("INSERT OVERWRITE TABLE manga SELECT * FROM temptable")  // Copies data from the dataframe into an actual table
-			spark.catalog.dropTempView("temptable")  // No longer needed
-
-			// Show "manga" table
-			println("Table partitioned by language:")
-			var mangaTable = spark.sql("SELECT * FROM manga")
-			mangaTable.show(100, false)
-			mangaTable.explain()  // Describe database setup
-
-			// Build "chapters" table
-			spark.sql("DROP TABLE IF EXISTS chapters")
-			// spark.sql("CREATE TABLE chapters (MangaID STRING, ChTitle STRING, Volume STRING, Chapter STRING, CreatedAt STRING, Pages INT) CLUSTERED BY (MangaID) INTO 20 BUCKETS ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
-			spark.sql("CREATE TABLE chapters (MangaID STRING, ChTitle STRING, Volume STRING, Chapter STRING, CreatedAt STRING, Pages INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
-
-			// Get some chapter data
-			var mangaID = mangaTable.first().getString(0)
-			var mangaTitle = mangaTable.first().getString(1)
-			var chapData = getChapters(mangaID)
-			if (chapData != None) {
-				chapData.get.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
-				var chapterTable = spark.sql("INSERT INTO TABLE chapters SELECT * FROM temptable")
-				spark.catalog.dropTempView("temptable")  // No longer needed
-				// println("\nChapters table:")
-				chapterTable = spark.sql("SELECT * FROM chapters ORDER BY MangaID, Chapter")
-				// chapterTable.show(false)  // Copies data from the dataframe into an actual table
-				// chapterTable.explain()  // Describe database setup
-				println(s"\nShowing stats for manga '${mangaTitle}'")
-				getMangaStats(mangaID)
-			}
-			mangaID = mangaTable.rdd.collect()(1).getString(0)
-			mangaTitle = mangaTable.rdd.collect()(1).getString(1)
-			chapData = getChapters(mangaID)
-			if (chapData != None) {
-				chapData.get.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
-				var chapterTable = spark.sql("INSERT INTO TABLE chapters SELECT * FROM temptable")
-				spark.catalog.dropTempView("temptable")  // No longer needed
-				// println("\nChapters table:")
-				chapterTable = spark.sql("SELECT * FROM chapters ORDER BY MangaID, Chapter")
-				// chapterTable.show(false)  // Copies data from the dataframe into an actual table
-				// chapterTable.explain()  // Describe database setup
-				println(s"\nShowing stats for manga '${mangaTitle}'")
-				getMangaStats(mangaID)
-			}
 			*/
+
+			if (queries) {  // Run the queries
+				// Build "manga" table
+				spark.sql("DROP TABLE IF EXISTS manga")
+				spark.sql("CREATE TABLE manga (MangaID STRING, Title STRING, Status STRING, Year INT) PARTITIONED BY (Language STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
+				df.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
+				spark.sql("INSERT OVERWRITE TABLE manga SELECT * FROM temptable")  // Copies data from the dataframe into an actual table
+				spark.catalog.dropTempView("temptable")  // No longer needed
+
+				// Show "manga" table
+				println("Table partitioned by language:")
+				var mangaTable = spark.sql("SELECT * FROM manga")
+				mangaTable.show(100, false)
+				mangaTable.explain()  // Describe database setup
+
+				// Build "chapters" table
+				spark.sql("DROP TABLE IF EXISTS chapters")
+				// spark.sql("CREATE TABLE chapters (MangaID STRING, ChTitle STRING, Volume STRING, Chapter STRING, CreatedAt STRING, Pages INT) CLUSTERED BY (MangaID) INTO 20 BUCKETS ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
+				spark.sql("CREATE TABLE chapters (MangaID STRING, ChTitle STRING, Volume STRING, Chapter STRING, CreatedAt STRING, Pages INT) ROW FORMAT DELIMITED FIELDS TERMINATED BY '|' STORED AS TEXTFILE")
+
+				// Get some chapter data
+				var mangaID = mangaTable.first().getString(0)
+				var mangaTitle = mangaTable.first().getString(1)
+				var chapData = getChapters(mangaID)
+				if (chapData != None) {
+					chapData.get.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
+					var chapterTable = spark.sql("INSERT INTO TABLE chapters SELECT * FROM temptable")
+					spark.catalog.dropTempView("temptable")  // No longer needed
+					// println("\nChapters table:")
+					chapterTable = spark.sql("SELECT * FROM chapters ORDER BY MangaID, Chapter")
+					// chapterTable.show(false)  // Copies data from the dataframe into an actual table
+					// chapterTable.explain()  // Describe database setup
+					println(s"\nShowing stats for manga '${mangaTitle}'")
+					getMangaStats(mangaID)
+				}
+				mangaID = mangaTable.rdd.collect()(1).getString(0)
+				mangaTitle = mangaTable.rdd.collect()(1).getString(1)
+				chapData = getChapters(mangaID)
+				if (chapData != None) {
+					chapData.get.createOrReplaceTempView("temptable")  // Registers the dataframe as "temptable"
+					var chapterTable = spark.sql("INSERT INTO TABLE chapters SELECT * FROM temptable")
+					spark.catalog.dropTempView("temptable")  // No longer needed
+					// println("\nChapters table:")
+					chapterTable = spark.sql("SELECT * FROM chapters ORDER BY MangaID, Chapter")
+					// chapterTable.show(false)  // Copies data from the dataframe into an actual table
+					// chapterTable.explain()  // Describe database setup
+					println(s"\nShowing stats for manga '${mangaTitle}'")
+					getMangaStats(mangaID)
+				}
+			}
 
 			// End Spark session
 			spark.stop()

@@ -962,6 +962,7 @@ package object CLITool {
 		var args = ArrayBuffer.empty[String]
 		var sargs = ArrayBuffer.empty[String]
 		var index = -1
+		var lastmode = mode
 		inputStr = ""
 		inputPos = 0
 
@@ -972,6 +973,7 @@ package object CLITool {
 			if (termResize())  // Redraw the screen if the terminal window's size has changed.
 				termUpdate()
 			input = reader.read(50)
+			lastmode = mode
 			mode match {
 				case "text" => {	// Text input mode
 					input match {
@@ -1548,7 +1550,7 @@ package object CLITool {
 				case _ => mode = "text"  // Unknown mode, so switch to "text" mode
 			}
 		}
-		new Command(mode, inputStr, command, args.toList, sargs.toList, index)
+		new Command(lastmode, inputStr, command, args.toList, sargs.toList, index)
 	}
 
 		/*	Likely safe keys:
