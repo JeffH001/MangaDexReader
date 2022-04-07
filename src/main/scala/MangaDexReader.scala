@@ -460,7 +460,7 @@ object MangaDexReader {
 						cmd = CLITool.getCommand()
 						if (login(cmd.args(0), cmd.args(1))) {
 							print(ansiResetLn + s"Logged in as '${cmd.args(0)}'.")
-							CLITool.updateMenu(Array("File", "Log Out", "Quit"), false)
+							CLITool.updateMenu(Array("File", "Log Out", "Quit", "Quit + Run Queries"), false)
 						} else {
 							print(ansiResetLn + s"Unable to log in as '${cmd.args(0)}'.  Incorrect password.")
 						}
@@ -468,7 +468,7 @@ object MangaDexReader {
 					case "Log Out" if (cmd.cmdType == "menu")	=> {  // Handle log out
 						logout()
 						print(ansiResetLn + "Logged out.")
-						CLITool.updateMenu(Array("File", "Login", "Quit"), false)
+						CLITool.updateMenu(Array("File", "Login", "Quit", "Quit + Run Queries"), false)
 					}
 					case _ 						=> print(ansiResetLn + s"Unknown command: '${cmd.raw}'")  // Unknown command
 				}
@@ -531,6 +531,7 @@ object MangaDexReader {
 					println(s"\nShowing stats for manga '${mangaTitle}'")
 					getMangaStats(mangaID)
 				}
+				println("\n  ---\n")
 				mangaID = mangaTable.rdd.collect()(1).getString(0)
 				mangaTitle = mangaTable.rdd.collect()(1).getString(1)
 				chapData = getChapters(mangaID)
