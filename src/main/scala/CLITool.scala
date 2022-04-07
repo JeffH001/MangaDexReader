@@ -369,6 +369,28 @@ package object CLITool {
 		}
 	}
 
+	/**
+	  * Add character to a string at a given position.
+	  *
+	  * @param inChr	Character to add to the string.  (input.toChar)
+	  * @param inStr	String to add it to.  (inputStr)
+	  * @param inPos	Positions to add it at.  (inputPos)
+	  * @return			Resulting string.
+	  */
+	private def inputAdd(inChr: Char, inStr: String, inPos: Int): String = {
+		var outStr = ""
+		if (inPos == inStr.length())  // Append input
+			outStr = inStr + inChr
+		else {  // Insert input
+			if (inPos > 0)
+				outStr = inStr.substring(0, inPos)
+			outStr += inChr
+			if (inPos < inStr.length)
+				outStr += inStr.substring(inPos, inStr.length)
+		}
+		outStr
+	}
+
 
 	// ======= Window Methods =======
 
@@ -943,23 +965,6 @@ package object CLITool {
 		inputStr = ""
 		inputPos = 0
 
-		/**
-		 * Add character to input.
-		 */
-		def inputAdd(): Unit = {
-			if (inputPos == inputStr.length())  // Append input
-				inputStr += input.toChar
-			else {  // Insert input
-				output = ""
-				if (inputPos > 0)
-					output = inputStr.substring(0, inputPos)
-				output += input.toChar
-				if (inputPos < inputStr.length - 1)
-					output += inputStr.substring(inputPos, inputStr.length)
-				inputStr = output
-			}
-		}
-
 		if (mode == "text")  // Display the prompt
 			print(ansiCursorSave + ansiCursorPos(1, terminal.getHeight - 1) + ansiReset + ansiClrLn + prompt + ansiMarker + ansiCursorLoad)
 		termUpdate()
@@ -1127,7 +1132,7 @@ package object CLITool {
 							}
 						}
 						case key if (charkeys.contains(key)) => {  // A printable character was entered
-							inputAdd()
+							inputStr = inputAdd(input.toChar, inputStr, inputPos)
 							inputPos += 1
 							drawText()
 						}
@@ -1289,6 +1294,7 @@ package object CLITool {
 								}
 							}
 							case "input"	=> {
+								var winOb = window(activewin).obj.asInstanceOf[CLIInputWin]
 								input match {
 									case -2	=>		// No input
 									case 0	=>		// CTRL+SPACE
@@ -1298,21 +1304,27 @@ package object CLITool {
 									case 7	=>		// CTRL+g
 									case 8	=>		// CTRL+h / SHIFT+BACKSPACE keys
 									case 9 	=> {	// CTRL+i / TAB key
-										window(activewin).obj.asInstanceOf[CLIInputWin].index += 1
-										if (window(activewin).index >= window(activewin).obj.asInstanceOf[CLIInputWin].items.size)
-											window(activewin).obj.asInstanceOf[CLIInputWin].index += -2
-										drawWindows()
+										winOb.index += 1
+										if (winOb.index >= winOb.items.size)
+											winOb.index = -2
+										termUpdate()
 									}
 									case 12	=>		// CTRL+l
 									case 10 | 13 | 32 => {	// ENTER or SPACE key
-										if (window(activewin).index < 0) {  // Activate OK/Cancel button
+										if (winOb.index < 0) {  // Activate OK/Cancel button
 											inputStr = ""
-											if (window(activewin).index == -2) {
+											if (winOb.index == -2) {
 												command = "OK"
-												for (a <- window(activewin).obj.asInstanceOf[CLIInputWin].items)  // Get inputs
+												inputStr = command
+												for (a <- winOb.items) {  // Get inputs
 													args :+= a._2
-											} else
+													sargs :+= sanitizeString(a._2)
+													inputStr += " '" + a._2 + "'"
+												}
+											} else {
 												command = "Cancel"
+												inputStr = command
+											}
 											if (activewin > -1 && activewin < window.length)
 												window.remove(activewin)
 											activewin = -1
@@ -1322,7 +1334,17 @@ package object CLITool {
 											print(ansiResetLn)
 											continue = false  // Exit the loop
 										} else {  // Entering text
-											//x
+											if (input == 32) {  // Add a space to the text
+												var key = winOb.items.toIndexedSeq(winOb.index)._1
+												winOb.items(key) = inputAdd(input.toChar, winOb.items(key), winOb.cursorPos(winOb.index))
+												winOb.cursorPos(winOb.index) += 1
+												termUpdate()
+											} else {  // Move to next part in input window
+												winOb.index += 1
+												if (winOb.index >= winOb.items.size)
+													winOb.index = -2
+												termUpdate()
+											}
 										}
 									}
 									case 14	=>		// CTRL+n
@@ -1342,7 +1364,18 @@ package object CLITool {
 										while (reader.peek(20) > 0)
 											keycmd += reader.read().toChar  // Read in any pending inputs
 										keycmd match {
-											case ""		=>		// ESC key
+											case ""		=> {	// ESC key  // Cancel the input window
+												command = "Cancel"
+												inputStr = command
+												if (activewin > -1 && activewin < window.length)
+													window.remove(activewin)
+												activewin = -1
+												mode = "empty"  // Exit "window" mode
+												termUpdate()
+												mode = "text"
+												print(ansiResetLn)
+												continue = false  // Exit the loop
+											}
 											case "d"	=>		// CTRL+DELETE keys
 											case "[A" | "OA" =>	// UP key
 											case "[1;2A"=>		// SHIFT+UP keys
@@ -1350,21 +1383,63 @@ package object CLITool {
 											case "[B" | "OB" =>	// DOWN key
 											case "[1;2B"=>		// SHIFT+DOWN keys
 											case "[1;5B"=>		// CTRL+DOWN keys
-											case "[C" | "OC" =>	// RIGHT key
+											case "[C" | "OC" => {	// RIGHT key
+												if (winOb.index >= 0) {  // On an input line
+													var key = winOb.items.toIndexedSeq(winOb.index)._1
+													if (winOb.cursorPos(winOb.index) < winOb.items(key).length())
+														winOb.cursorPos(winOb.index) += 1
+													termUpdate()
+												} else {  // Set focus on the next input window element
+													winOb.index += 1
+													if (winOb.index >= winOb.items.size)
+														winOb.index = -2
+													termUpdate()
+												}
+											}
 											case "[1;2C"=>		// SHIFT+RIGHT keys
 											case "[1;5C"=>		// CTRL+RIGHT keys
-											case "[D" | "OD" =>	// LEFT key
+											case "[D" | "OD" => {	// LEFT key
+												if (winOb.index >= 0) {  // On an input line
+													if (winOb.cursorPos(winOb.index) > 0)
+														winOb.cursorPos(winOb.index) -= 1
+													termUpdate()
+												} else {  // Set focus on the previous input window element
+													winOb.index -= 1
+													if (winOb.index < -2)
+														winOb.index = winOb.items.size - 1
+													termUpdate()
+												}
+											}
 											case "[1;2D"=>		// SHIFT+LEFT keys
 											case "[1;5D"=>		// CTRL+LEFT keys
-											case "[F" | "[4~" | "[8~" =>	// END key
-											case "[H" | "[1~" | "[7~" =>	// HOME key
+											case "[F" | "[4~" | "[8~" => {	// END key
+												if (winOb.index >= 0) {  // On an input line
+													var key = winOb.items.toIndexedSeq(winOb.index)._1
+													winOb.cursorPos(winOb.index) = winOb.items(key).length()
+													termUpdate()
+												}
+											}
+											case "[H" | "[1~" | "[7~" => {	// HOME key
+												if (winOb.index >= 0) {  // On an input line
+													winOb.cursorPos(winOb.index) = 0
+													termUpdate()
+												}
+											}
 											case "[Z"	=>		// SHIFT+TAB keys
 											case "[2~"	=> {	// INSERT key; mode switch key
 												mode = "text"
 												termUpdate()
 												print(ansiResetLn + mode.toUpperCase + " mode. ")
 											}
-											case "[3~"	=>		// DELETE key
+											case "[3~"	=> {		// DELETE key
+												if (winOb.index >= 0) {  // On an input line
+													var key = winOb.items.toIndexedSeq(winOb.index)._1
+													if (winOb.items(key).length > 0 && winOb.cursorPos(winOb.index) < winOb.items(key).length) {
+														winOb.items(key) = winOb.items(key).substring(0, winOb.cursorPos(winOb.index)) + winOb.items(key).substring(winOb.cursorPos(winOb.index) + 1, winOb.items(key).length)
+														termUpdate()
+													}
+												}
+											}
 											case "[3:2~"=>		// SHIFT+DELETE keys
 											case "[5~"	=>		// PAGE UP key
 											case "[6~"	=>		// PAGE DOWN key
@@ -1374,8 +1449,24 @@ package object CLITool {
 									case 29	=>		// CTRL+]
 									case 31	=>		// CTRL+/
 									// case 32	=>		// ENTER key
-									case 127 =>		// BACKSPACE key
-									case key if (charkeys.contains(key)) =>		// A printable character was entered
+									case 127 => {	// BACKSPACE key
+										if (winOb.index >= 0) {  // On an input line
+											var key = winOb.items.toIndexedSeq(winOb.index)._1
+											if (winOb.cursorPos(winOb.index) > 0 && winOb.items(key).length > 0) {
+												winOb.items(key) = winOb.items(key).substring(0, winOb.cursorPos(winOb.index) - 1) + winOb.items(key).substring(winOb.cursorPos(winOb.index), winOb.items(key).length)
+												winOb.cursorPos(winOb.index) -= 1
+												termUpdate()
+											}
+										}
+									}
+									case key if (charkeys.contains(key)) =>	{  // A printable character was entered
+										if (winOb.index >= 0) {  // On an input line
+											var key = winOb.items.toIndexedSeq(winOb.index)._1
+											winOb.items(key) = inputAdd(input.toChar, winOb.items(key), winOb.cursorPos(winOb.index))
+											winOb.cursorPos(winOb.index) += 1
+											termUpdate()
+										}
+									}
 									case key if (key < 32) =>
 										print(ansiResetLn + s"You pressed an unknown key: ($key) ")
 									case key if (key >= 32) =>

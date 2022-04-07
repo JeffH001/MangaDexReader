@@ -4,7 +4,7 @@ import scala.collection.mutable.LinkedHashMap
 import scala.collection.mutable.ArrayBuffer
 import org.apache.log4j.{ Level, Logger }
 import org.apache.spark.sql.{ SparkSession, SaveMode, Row, DataFrame }
-import org.apache.spark.sql.types._  // { StringType, StructField, StructType }  DataFrame
+import org.apache.spark.sql.types._  // { StringType, StructField, StructType, DataFrame }
 import com.github.nscala_time.time.Imports._
 import java.sql.Timestamp
 import java.sql.Date
@@ -386,7 +386,7 @@ object MangaDexReader {
 
 		var term = CLITool.init()
 		CLITool.addMenu(Array("File", "Login", "Quit"), false)
-		CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I download the latest manga data...", 30, false)
+		CLITool.addMessage("Loading...", "Please wait while I download the latest manga data...", 35, false)
 		CLITool.termUpdate(true)
 		// Read data from the web
 		var tableData = getMangaData("", 2022)
@@ -422,7 +422,7 @@ object MangaDexReader {
 			*/
 
 			CLITool.deleteWin("Loading...")
-			CLITool.addMessage("Loading...", "Welcome to the MangaDex Reader.\nPlease wait while I build the tables...", 30, false)
+			CLITool.addMessage("Loading...", "Please wait while I build the tables...", 35, false)
 			CLITool.termUpdate(true)
 			// Build database
 			spark.sql("SET hive.exec.dynamic.partition.mode=nonstrict")
@@ -439,7 +439,7 @@ object MangaDexReader {
 			//spark.sql("SELECT * FROM users").show(false)
 
 			CLITool.deleteWin("Loading...")
-			CLITool.addMessage("Ready", "Welcome to the MangaDex Reader.\nYou can use the INSERT key to select an item from the menu.", 30)
+			CLITool.addMessage("Welcome to the MangaDex Reader.", "You can use the INSERT key to select an item from the menu.\n\n(Hit any key to begin.)", 35)
 
 			var continue = true
 			CLITool.termUpdate(true)
@@ -451,9 +451,19 @@ object MangaDexReader {
 					case ""						=>  // Do nothing
 					case "q" | "quit" | "Quit"	=> continue = false
 					case "Login"				=> {  // Handle login
-						CLITool.addInput("Login Window", "Login or create a new account.", LinkedHashMap(("Username:", "default"), ("~Password:", "")), 35)
+						CLITool.addInput("Login Window", "Login or create a new account.", LinkedHashMap(("Username:", ""), ("~Password:", "")), 35)
 						cmd = CLITool.getCommand()
-						print(ansiResetLn + s"Login result: '${cmd.raw}'")
+						if (login(cmd.args(0), cmd.args(1))) {
+							print(ansiResetLn + s"Logged in as '${cmd.args(0)}'.")
+							CLITool.addMenu(Array("File", "Log Out", "Quit"), false)
+						} else {
+							print(ansiResetLn + s"Unable to log in as '${cmd.args(0)}'.  Incorrect password.")
+						}
+					}
+					case "Log Out"				=> {  // Handle log out
+						logout()
+						print(ansiResetLn + "Logged out.")
+						CLITool.addMenu(Array("File", "Login", "Quit"), false)
 					}
 					case _ 						=> print(ansiResetLn + s"Unknown command: '${cmd.raw}'")  // Unknown command
 				}
