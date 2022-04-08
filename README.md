@@ -2,7 +2,8 @@
 ## Table of Contents
 
 * <a href="#project-description">Project Description</a>
-* <a href="#installation">Installation</a>
+* <a href="#made-with">Made With...</a>
+* <a href="#the-ui">The UI</a>
 
 ## Project Description
 A test project using Scala, Spark, and Hive to read data from the MangaDex API using a console application.
